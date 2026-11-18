@@ -26,10 +26,15 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install dependencies
-        run: npm install
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm install --no-audit --no-fund
 
       - name: Build SolGrid frontend
+        working-directory: ./frontend
         run: npm run build
 
       - name: Upload GitHub Pages artifact
