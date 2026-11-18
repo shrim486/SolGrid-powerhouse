@@ -8,7 +8,9 @@ import SummaryCards from "./components/SummaryCards.jsx";
 import SolarChart from "./components/SolarChart.jsx";
 import TradingPanels from "./components/TradingPanels.jsx";
 import ActivityLog from "./components/ActivityLog.jsx";
+import BlockchainProof from "./components/BlockchainProof.jsx";
 import {
+  GENESIS_HASH,
   applyBuyListing,
   applyCreateListing,
   applySolarGenerationTick,
@@ -128,6 +130,11 @@ export default function App() {
         ...genEvents.map((ev) => ({
           blockNumber: ev.blockNumber,
           logIndex: ev.index,
+          txHash: ev.transactionHash,
+          eventType: "EnergyGenerated",
+          actor: ev.args.prosumer,
+          kwh: Number(ev.args.kwhAmount),
+          priceEth: 0,
           id: `gen-${ev.transactionHash}-${ev.index}`,
           type: "Solar",
           message: `${getHouseLabel(ev.args.prosumer) || shortenAddress(ev.args.prosumer)} generated ${Number(ev.args.kwhAmount)} kWh of solar energy`,
@@ -141,6 +148,11 @@ export default function App() {
         ...listEvents.map((ev) => ({
           blockNumber: ev.blockNumber,
           logIndex: ev.index,
+          txHash: ev.transactionHash,
+          eventType: "EnergyListed",
+          actor: ev.args.seller,
+          kwh: Number(ev.args.amount),
+          priceEth: Number(ethers.formatEther(ev.args.pricePerKwh)),
           id: `list-${ev.transactionHash}-${ev.index}`,
           type: "Listed",
           message: `Neighbor ${shortenAddress(ev.args.seller)} listed ${Number(ev.args.amount)} kWh at ${formatEth(ethers.formatEther(ev.args.pricePerKwh))} ETH/kWh`,
@@ -154,6 +166,11 @@ export default function App() {
         ...buyEvents.map((ev) => ({
           blockNumber: ev.blockNumber,
           logIndex: ev.index,
+          txHash: ev.transactionHash,
+          eventType: "EnergyPurchased",
+          actor: ev.args.buyer,
+          kwh: Number(ev.args.amount),
+          priceEth: Number(ethers.formatEther(ev.args.totalPrice)),
           id: `buy-${ev.transactionHash}-${ev.index}`,
           type: "Purchased",
           message: `Neighbor ${shortenAddress(ev.args.buyer)} bought ${Number(ev.args.amount)} kWh for ${formatEth(ethers.formatEther(ev.args.totalPrice))} ETH`,
@@ -172,6 +189,35 @@ export default function App() {
         )
         .slice(0, 20);
 
+      const uniqueBlockNums = [...new Set(combinedEvents.slice(0, 8).map((e) => e.blockNumber))];
+      const blockMetaMap = {};
+      await Promise.all(
+        uniqueBlockNums.map(async (num) => {
+          const blk = await provider.getBlock(num);
+          if (blk) blockMetaMap[num] = blk.parentHash;
+        })
+      );
+
+      const onChainBlocks = combinedEvents.slice(0, 8).map((ev) => ({
+        id: `rpc-${ev.id}`,
+        blockNumber: ev.blockNumber,
+        txHash: ev.txHash,
+        parentHash: blockMetaMap[ev.blockNumber] || GENESIS_HASH,
+        eventType: ev.eventType,
+        actor: ev.actor,
+        kwh: ev.kwh,
+        priceEth: ev.priceEth,
+        time: ev.time,
+        payload: JSON.stringify({
+          blockNumber: ev.blockNumber,
+          txHash: ev.txHash,
+          eventType: ev.eventType,
+          actor: ev.actor,
+          kwh: ev.kwh,
+        }),
+        source: "ethereum-rpc",
+      }));
+
       setGridState((prev) => ({
         ...prev,
         ethBalance: activeAccount ? nextEthBalance : prev.ethBalance,
@@ -181,6 +227,7 @@ export default function App() {
         listings: formattedListings,
         solarSeries: solarPoints,
         activities: combinedEvents,
+        ledgerBlocks: onChainBlocks,
       }));
     } catch (err) {
       console.error("Failed to sync on-chain state:", err);
@@ -576,6 +623,12 @@ export default function App() {
         />
 
         <ActivityLog activities={gridState.activities} />
+
+        <BlockchainProof
+          ledgerBlocks={gridState.ledgerBlocks}
+          contractConfig={contractConfig}
+          chainOnline={chainOnline}
+        />
       </main>
     </div>
   );
