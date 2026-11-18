@@ -1,0 +1,6 @@
+{
+  "name": "SolGrid",
+  "description": "Decentralized Microgrid P2P Energy Trading Platform",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
